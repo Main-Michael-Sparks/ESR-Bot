@@ -1,0 +1,260 @@
+//********************************************************************ESR-Bot (beta)
+//
+//©by Michael Sparks (FakeNewsNeo)
+//@version=4
+
+strategy(title="ESR-Bot (beta)", shorttitle="ESRB (beta)", overlay=false)
+
+//********************************************************************Indicator Inputs
+
+//RSI inputs
+overBoughtLine = input(title="Over Bought Line", type=input.integer, defval=70, minval=2, group="Bot Indicators - RSI Settings")
+RSIObRangeInput = input(title="Over Bought Range Line", type=input.integer, defval=10, minval=1, group="Bot Indicators - RSI Settings")
+overSoldLine = input(title="Over Sold Line", type=input.integer, defval=30, minval=1, group="Bot Indicators - RSI Settings")
+RSIOsRangeInput = input(title="Over Sold Range Line", type=input.integer, defval=10, minval=1, group="Bot Indicators - RSI Settings")
+rsiLength = input(title="RSI Length line", type=input.integer, defval=14, minval=1, group="Bot Indicators - RSI Settings")
+RSILengthSmoothingPeriod = input(title="RSI Length Smoothing", type=input.integer, defval=1, minval=1, group="Bot Indicators - RSI Settings")
+rsiSource = input(title="RSI Source", type=input.source, defval=ohlc4, group="Bot Indicators - RSI Settings")
+
+//EMA inputs
+longEMAPeriod = input(title="Long EMA Period", type=input.integer, defval=50, minval=1, group="Bot Indicators - EMA Settings")
+longEMASource = input(title="Long EMA Source", type=input.source, defval=ohlc4, group="Bot Indicators - EMA Settings")
+shortEMAPeriod = input(title="Short EMA Period", type=input.integer, defval=10, minval=1, group="Bot Indicators - EMA Settings")
+shortEMASource = input(title="Short EMA Source", type=input.source, defval=ohlc4, group="Bot Indicators - EMA Settings")
+longCrossLookBack = input(title="Bullish Cross Search Period", type=input.integer, defval=20, minval=1, group="Bot Indicators - EMA Settings")
+shortCrossLookBack = input(title="Bearish Cross Search Period", type=input.integer, defval=20, group="Bot Indicators - EMA Settings")
+
+//*********************************************************************Ticket Inputs
+
+//Buy ticket inputs
+apiAliasLong = input(title="API Alias Name", type=input.string, defval="*", group="Ticket - Long Order Settings")
+exchangeLong = input(title="Pick Exchange", type=input.string, options=["Kraken","Gemini"], defval="Gemini", group="Ticket - Long Order Settings")
+pairLong = input(title="Choose Pair", type=input.string, options=["BTC/USD","ETH/USD"], defval="BTC/USD", group="Ticket - Long Order Settings")
+orderBookLong = input(title="Choose Book type(Long: Use with leverage)", type=input.string, options=["buy","long"], defval="buy", group="Ticket - Long Order Settings")
+orderTypeLong = input(title="Choose Order Type", type=input.string, defval="market", group="Ticket - Long Order Settings") //add additional order types later
+pairAmountLong = input(title="Order Amount", type=input.float, defval=0.0000, group="Ticket - Long Order Settings")
+useLevLong = input(title="Use leverage?", type=input.bool, defval=false, group="Ticket - Long Order Settings")
+levAmountLong = input(title="How Much Leverage?", type=input.integer, options=[0,1,2,3,4,5], defval=0, group="Ticket - Long Order Settings")
+//setLimitPriceLong = input(title="Set limit price (If Limit Order)", type=input.float, defval=0, group="Ticket - Long Order Settings") //add later
+//setStopOrderPriceLong =input(title="Set Stop Price (If Stop Order)", type=input.float, defval=0, group="Ticket - Long Order Settings") // add later
+setStopLossLong = input(title="Use a Stop-Loss?", type=input.bool, defval=false, group="Ticket - Long Order Settings")
+isStopLossPrecentLong = input(title="Stop-Loss a percentage?", type=input.bool, defval=false, group="Ticket - Long Order Settings")
+stopLossAmountLong = input(title="Set Stop-Loss Amount", type=input.float, defval=0.000, group="Ticket - Long Order Settings")
+
+//Sell ticket inputs
+apiAliasShort = input(title="API Alias Name", type=input.string, defval="*", group="Ticket - Short Order Settings")
+exchangeShort = input(title="Pick Exchange", type=input.string, options=["Kraken","Gemini"], defval="Gemini", group="Ticket - Short Order Settings")
+pairShort = input(title="Choose Pair", type=input.string, options=["BTC/USD","ETH/USD"], defval="BTC/USD", group="Ticket - Short Order Settings")
+orderBookShort = input(title="Choose Book type(Short: Use with leverage)", type=input.string, options=["sell","short"], defval="sell", group="Ticket - Short Order Settings")
+orderTypeShort = input(title="Choose Order Type", type=input.string, defval="market", group="Ticket - Short Order Settings") //add additional order types later
+pairAmountShort = input(title="Order Amount", type=input.float, defval=0.0000, group="Ticket - Short Order Settings")
+useLevShort = input(title="Use leverage?", type=input.bool, defval=false, group="Ticket - Short Order Settings")
+levAmountShort = input(title="How Much Leverage?", type=input.integer, options=[0,1,2,3,4,5], defval=0, group="Ticket - Short Order Settings")
+//setLimitPriceShort = input(title="Set limit price (if limit Order)", type=input.float, defval=0, group="Ticket - Short Order Settings") //add later
+//setStopOrderPriceShort = input(title="Set Stop Price (If Stop Order)", type=input.float, defval=0, group="Ticket - Short Order Settings") //add later
+setStopLossShort = input(title="Use a Stop-Loss?", type=input.bool, defval=false, group="Ticket - Short Order Settings")
+isStopLossPrecentShort = input(title="Stop-Loss a Precentage?", type=input.bool, defval=false, group="Ticket - Short Order Settings")
+stopLossAmountShort = input(title="Set Stop-Loss Amount", type=input.float, defval=0.000, group="Ticket - Short Order Settings")
+
+//*********************************************************************Ticket Handling
+
+//Convert Exchange names to autoview requirements. 
+
+//Gemini Sandbox
+if (exchangeLong == "Gemini")
+    exchangeLong := "geminisandbox"
+
+if (exchangeShort == "Gemini")
+    exchangeShort := "geminisandbox"
+
+//Convert Pair Types to Autoview/Exchange Requirements
+
+//Kraken pair types
+if (exchangeLong == "Kraken" and pairLong =="BTC/USD") 
+    pairLong := "xbtusd"
+else if (exchangeLong == "Kraken" and pairLong == "ETH/USD")
+    pairLong := "ethusd"
+
+if (exchangeShort == "Kraken" and pairShort == "BTC/USD")
+    pairShort := "xbtusd"
+else if (exchangeShort == "Kraken" and pairShort == "ETH/USD")
+    pairShort := "ethusd"
+
+//Gemini pair types
+if (exchangeLong == "Gemini" or exchangeLong == "geminisandbox") and pairLong == "BTC/USD"
+    pairLong := "btcusd"
+else if (exchangeLong == "Gemini" or exchangeLong == "geminisandbox") and pairLong == "ETH/USD"
+    pairLong := "ethusd"
+
+if (exchangeShort == "Gemini" or exchangeShort == "geminisandbox") and pairShort == "BTC/USD"
+    pairShort := "btcusd"
+else if (exchangeShort == "Gemini" or exchangeShort == "geminisandbox") and pairShort == "ETH/USD"
+    pairShort := "ethusd"
+
+//Convert Stop-Loss into Percentage (if Set by User)
+
+//Buy ticket SL percentage
+pStoplossLong = "Buy Side SL String Not Set"
+if (isStopLossPrecentLong)
+    pStoplossLong := "-" + tostring(stopLossAmountLong) + "%"
+    
+//Sell ticket SL percentage
+pStoplossShort = "Sell Side SL String Not Set"
+if (isStopLossPrecentShort)
+    pStoplossShort := "-" + tostring(stopLossAmountShort) + "%"
+
+//Convert Bools to Int for use in if statements
+
+//Buy ticket bools
+useLevLongInt = useLevLong ? 1 : 0
+setStopLossLongInt = setStopLossLong ? 1:0
+isStopLossPrecentLongInt = isStopLossPrecentLong ? 1 : 0
+
+//Sell ticket bools
+useLevShortInt = useLevShort ? 1 : 0
+setStopLossShortInt = setStopLossShort ? 1 : 0
+isStopLossPrecentShortInt = isStopLossPrecentShort ? 1 : 0
+
+//Buy and Sell Ticket Handling for Autoview
+
+//Buy Ticket - Set default and handle different user inputs (options)
+longTicket = "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong)
+if (useLevLongInt > 0 and setStopLossLongInt > 0 and isStopLossPrecentLongInt > 0) 
+    longTicket := "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong) + " " + "l=" + tostring(levAmountLong) + " " + "sl=" + pStoplossLong
+else if (useLevLongInt > 0 and setStopLossLongInt > 0 and isStopLossPrecentLongInt == 0)
+    longTicket := "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong) + " " + "l=" + tostring(levAmountLong) + " " + "sl=" + tostring(stopLossAmountLong)
+else if (useLevLongInt > 0 and setStopLossLongInt == 0 and isStopLossPrecentLongInt == 0) 
+    longTicket := "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong) + " " + "l=" + tostring(levAmountLong)
+else if (setStopLossLongInt > 0 and isStopLossPrecentLongInt > 0 and useLevLongInt == 0)
+    longTicket := "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong) + " " + "sl=" + pStoplossLong
+else if (setStopLossLongInt > 0 and isStopLossPrecentLongInt == 0 and useLevLongInt == 0)
+    longTicket := "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "s=" + pairLong + " " + "b=" + orderBookLong + " " + "t=" + orderTypeLong + " " + "q=" + tostring(pairAmountLong) + " " + "sl=" + tostring(stopLossAmountLong)
+    
+//Sell Ticket - Set default and handle different user inputs (options)
+shortTicket = "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort)
+if (useLevShortInt > 0 and setStopLossShortInt > 0 and isStopLossPrecentShortInt > 0) 
+    shortTicket := "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort) + " " + "l=" + tostring(levAmountShort) + " " + "sl=" + pStoplossShort
+else if (useLevShortInt > 0 and setStopLossShortInt > 0 and isStopLossPrecentShortInt == 0)
+    shortTicket := "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort) + " " + "l=" + tostring(levAmountShort) + " " + "sl=" + tostring(stopLossAmountShort)
+else if (useLevShortInt > 0 and setStopLossShortInt == 0 and isStopLossPrecentShortInt == 0) 
+    shortTicket := "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort) + " " + "l=" + tostring(levAmountShort)
+else if (setStopLossShortInt > 0 and isStopLossPrecentShortInt > 0 and useLevShortInt == 0)
+    shortTicket := "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort) + " " + "sl=" + pStoplossShort
+else if (setStopLossShortInt > 0 and isStopLossPrecentShortInt == 0 and useLevShortInt == 0)
+    shortTicket := "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "s=" + pairShort + " " + "b=" + orderBookShort + " " + "t=" + orderTypeShort + " " + "q=" + tostring(pairAmountShort) + " " + "sl=" + tostring(stopLossAmountShort)
+
+//Order Switching Tickets (close position and cancel open)
+
+//Buy Ticket Switching
+cancelOpenOrdersLong = "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "c=order" + " " + "t=open" + " " + "s=" + pairLong
+closeOpenPositionsLong = "a=" + apiAliasLong + " " + "e=" + exchangeLong + " " + "c=position" + " " + "t=open" + " " + "s=" + pairLong
+
+//Sell Ticket Switching
+cancelOpenOrdersShort = "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "c=order" + " " + "t=open" + " " + "s=" + pairShort
+closeOpenPositionsShort = "a=" + apiAliasShort + " " + "e=" + exchangeShort + " " + "c=position" + " " + "t=open" + " " + "s=" + pairShort
+
+//Ticket formating for alerts & autoview
+
+//long
+completeOrderTicketLong = cancelOpenOrdersShort + " " + "|delay=3|" + " " + closeOpenPositionsShort + " " + "|delay=3|" + " " + longTicket
+
+//short
+completeOrderTicketShort = cancelOpenOrdersLong + " " + "|delay=3|" + " " + closeOpenPositionsLong + " " + "|delay=3|" + " " + shortTicket
+
+//*********************************************************************Bot Indicators
+
+//RSI Function(s)
+rsiPrimary = rsi(rsiSource, rsiLength)
+
+//EMA Function(s)
+emaLong = ema(longEMASource, longEMAPeriod)
+emaShort = ema(shortEMASource, shortEMAPeriod)
+
+//Indicator Conditional Functions
+
+//RSI OB/OS conditions
+rsiCrossShort = crossover(rsiPrimary,overBoughtLine)
+rsiCrossLong = crossunder(rsiPrimary,overSoldLine)
+
+//EMA bearish/bullish conditions
+emaCrossLong = crossover(emaShort,emaLong)
+emaCrossShort = crossunder(emaShort,emaLong)
+
+//Indicator Modifications
+
+//RSI Length Smoothing
+var RSILengthAvgArray = array.new_float(size=RSILengthSmoothingPeriod) //New Array
+array.shift(id=RSILengthAvgArray) //Fifo through array
+array.push(id=RSILengthAvgArray, value=rsiPrimary) //Inject new bars
+SmoothedRSILength = array.avg(id=RSILengthAvgArray)//Run a simple average on RSI Length
+
+//RSI Range (rough idea, build on it later)
+RSIoverBoughtRange = (overBoughtLine - RSIObRangeInput)
+RSIoverSoldRange =  (RSIOsRangeInput + overSoldLine)
+
+//Indicator Storage for search periods
+
+//EMA long cross search period (threshold)
+var longCrossArray = array.new_bool(size=longCrossLookBack) //Create New Array
+array.shift(id=longCrossArray) //Fifo through array
+array.push(id=longCrossArray, value=emaCrossLong) //Inject new bars
+longCrossSearch = array.includes(id=longCrossArray, value=true) //Find the long cross in array
+
+//EMA short cross search period (threshold)
+var shortCrossArray = array.new_bool(size=shortCrossLookBack) //New Array
+array.shift(id=shortCrossArray) //Fifo through array
+array.push(id=shortCrossArray, value=emaCrossShort) //Inject new bars
+shortCrossSearch = array.includes(id=shortCrossArray, value=true) //Find the short cross in array
+
+//Translate ema-crosses into an rsi scale for plotting
+longCrossSearchPlot = longCrossSearch ? RSIoverSoldRange : overSoldLine
+shortCrossSearchPlot = shortCrossSearch ? RSIoverBoughtRange : overBoughtLine
+
+//*********************************************************************Order Execution
+
+//Order execution Switch(s) (long to short/short to long switch)
+
+//Switches and default states
+var bool controlSwitch = na //Default state is deactivated
+var bool initalizationSwitch = true //Default state is on
+
+// Turns on the control switch, sets its default state then deactivates initalization switch. 
+if (((SmoothedRSILength <= RSIoverSoldRange) or rsiCrossLong) and longCrossSearch) and (initalizationSwitch == true)  //If bot starts at a long position
+    controlSwitch := true //Set control switch to long
+    initalizationSwitch := false //Turn off initalization switch
+else if (((SmoothedRSILength >= RSIoverBoughtRange) or rsiCrossShort) and shortCrossSearch) and (initalizationSwitch == true) //If bot starts at a short position
+    controlSwitch := false //Set control switch to short
+    initalizationSwitch := false //Turn off initalization switch
+    
+//Send orders
+    
+//Long entry conditions and send long orders
+if (((SmoothedRSILength <= RSIoverSoldRange) or rsiCrossLong) and longCrossSearch) and (controlSwitch == true) //entry conditions
+    strategy.entry(id="LongEntry", long=true) //strategy tester plugin
+    strategy.close(id="ShortEntry") //strategy tester plugin
+    alert(message=completeOrderTicketLong) // Close short postion(s) and open long position.
+    controlSwitch := false // Execute order once, set switch to short
+
+//Long entry conditions and send short orders
+if  (((SmoothedRSILength >= RSIoverBoughtRange) or rsiCrossShort) and shortCrossSearch) and (controlSwitch == false) //entry conditions
+    strategy.entry(id="ShortEntry", long=false) //strategy tester plugin
+    strategy.close(id="LongEntry") //strategy tester plugin
+    alert(message=completeOrderTicketShort) //Close long position(s) and open short position. 
+    controlSwitch := true //Execute order once, set switch to long
+    
+//*********************************************************************Plots
+
+//Plots and indicator default skin
+oblPlot = plot(overBoughtLine, title="RSI OB Line", color=color.black, linewidth=1, style=plot.style_line)
+obrPlot = plot(RSIoverBoughtRange, title="RSI OB Range", color=color.black, linewidth=1, style=plot.style_line)
+plot(SmoothedRSILength, title="RSI S-Length", color=color.orange, linewidth=1, style=plot.style_line)
+osrPlot = plot(RSIoverSoldRange, title="RSI OS Range", color=color.black, linewidth=1, style=plot.style_line)
+oslPlot = plot(overSoldLine, title="RSI OS Line", color=color.black, linewidth=1, style=plot.style_line)
+
+//Background color fill for OB-OS Range. 
+fill(plot1=oblPlot, plot2=obrPlot, color=#e60000)
+fill(plot1=oslPlot, plot2=osrPlot, color=#e60000)
+
+//EMA-RSI cross plots
+plot(longCrossSearchPlot, title="Long Cross Plot", color=color.green, linewidth=1, style=plot.style_line)
+plot(shortCrossSearchPlot, title="Short Cross Plot", color=color.red, linewidth=1, style=plot.style_line)

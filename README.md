@@ -51,10 +51,10 @@ ESRB currently supports buying and selling(shorting) at market price with or wit
 Both sides of the trade ticket must be filled out for the flip trading mechanisms to work correctly. So the ticket for a bullish trade AND a ticket for a bearish trade must be filled out and ready to go before the bot starts trading.  
 
 ##### Exchanges with Built-in Support
-* Gemini Sandbox
+* Gemini Sandbox:
 A safe environment to test the bot.
 
-* Kraken
+* Kraken:
 Untested in live accounts.
 
 ##### Trading Pairs with Built-in Support

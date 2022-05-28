@@ -1,7 +1,7 @@
 
 # Cryptocurrency Autoview Trading Bot
 ---
-### ESR-Bot: EMA-Smoothed RSI Bot
+### ESR-Bot: EMA Smoothed RSI Bot
 ![This is an image](https://github.com/Main-Michael-Sparks/ESR-Bot-/raw/main/ESRB%20Screenshots/ESRB.png)
 ---
 > ***Requires Trading View and Autoview***
